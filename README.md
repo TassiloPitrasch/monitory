@@ -37,6 +37,7 @@ The script checks for three things:
  2. IPs unblocked by fail2ban.
  3. Unsuccessful authentication attempts with the usernames defined in the settings-file.
 
-The first two metrics are collected since the last time the script was executed; the third one is retrieved via the `journalctl` option `--yesterday` - gathering data since midnight of the previous day.
+The metrics are collected since the last time the script was executed.
+During the first execution, the option `--since yesterday` is used for `journalctl` when grabbing the data for the third metric.
 Note that no notification is send if no events were parsed.
 

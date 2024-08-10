@@ -6,6 +6,11 @@ get_date () {
     date +"%d.%m.%Y %H:%M:%S %Z"
 }
 
+# Removing generated files when terminating
+clean_up () {
+    rm -f "${OUT_FILE}" "${DATA_FILE}"
+}
+
 # Adding a new fact section to the out-file with a placeholder for the actual data that is stored in FACTS
 # Globals: OUT_FILE, FACTS
 add_facts_section () {
@@ -30,13 +35,14 @@ add_facts_section () {
 }
 
 
-# Home, temporary and template directories and files and log-file
+# Home, temporary and template directories and files, log-file and file to track the date of the last execution
 MONITORING_HOME="$(dirname "$(readlink -f "${0}")")"
 SETTINGS_FILE="${MONITORING_HOME}/settings.json"
 MONITORING_TEMP="${MONITORING_HOME}/temp"
 MONITORING_TEMPLATES="${MONITORING_HOME}/templates"
 SECTIONS_TEMPLATE="${MONITORING_TEMPLATES}/sections.json"
 LOG_FILE="${MONITORING_HOME}/log.txt"
+LAST_FILE="${MONITORING_TEMP}/last"
 
 # Log-file rotation
 [[ "$(du -s "${LOG_FILE}" | cut -f1)" -gt 100000 ]] && printf "%s - Lofile rotated.\n" "$(get_date)" > "${LOG_FILE}"
@@ -68,13 +74,18 @@ declare -A FACTS
 readonly hacker_name_file="${MONITORING_TEMP}/hacker_names.txt"
 readonly matching_names_file="${MONITORING_TEMP}/matched_names.txt"
 true > "${matching_names_file}"
+# Parsing the time of the last execution
+if [[ -s "${LAST_FILE}" ]]; then
+    last_execution="$(cat "${LAST_FILE}")"
+else
+    last_execution="yesterday"
+fi
 # Getting the names that tried to authenticate to the server via ssh
 # Successful attempts are ignored
-journalctl -u ssh --since yesterday --no-pager | grep -v "session opened" | grep -E -o "user [^ (]*" | cut -d " " -f2 | sort -u > "${hacker_name_file}"
+journalctl -u ssh --since "${last_execution}" --no-pager | grep -v "session opened" | grep -E -o "user [^ (]*" | cut -d " " -f2 | sort -u > "${hacker_name_file}"
 # Parsing the names of interest that indicate targeted hacking
 mapfile -t private_names < <(jq -r ".private_names[]" "${SETTINGS_FILE}")
 readonly private_names
-
 # Checking if one of the private names has been used
 for private_name in "${private_names[@]}"; do
     match="$(grep -i -E "\b${private_name}\b" "${hacker_name_file}")"
@@ -114,7 +125,8 @@ fi
 
 # Ending the execution if nothing to report has been identified
 if [[ -z "${FACTS[*]}" ]]; then
-    rm -f "${OUT_FILE}" "${DATA_FILE}"
+    clean_up
+    printf "%s" "$(date +"%Y-%m-%d %H:%M:%S")" > "${LAST_FILE}"
     printf "%s - Nothing to report.\n" "$(get_date)" >> "${LOG_FILE}"
     exit 0
 fi
@@ -128,7 +140,7 @@ for fact in "${!FACTS[@]}"; do
     printf '"%s": "%s",\n' "${fact}" "${FACTS[$fact]}" >> "${DATA_FILE}"
 done
 # Adding the title here as well (as it contains a variable - the date)
-printf '"%s": "%s"\n' "title" "$(date +"%d.%m.%Y %H:%M:%S %Z") - Kore Monitoring Summary" >> "${DATA_FILE}"
+printf '"%s": "%s"\n' "title" "$(get_date) - Kore Monitoring Summary" >> "${DATA_FILE}"
 printf "}" >> "${DATA_FILE}"
 
 # Cleansing the data-file
@@ -141,5 +153,8 @@ sed -i "s|\\\n|\\\n\\\n|g" "${DATA_FILE}"
 if [[ "$(curl -X POST -H "Content-Type: application/json" -d "$(jq -n --arg "summary" "${summary}" --arg "color" "${color}" --arg "text" "${text}" --argfile "data" "${DATA_FILE}" -f "${OUT_FILE}")" "${webhook_url}")" -ne 1 ]]; then
     printf "%s - Failed to push message to Teams.\n" "$(get_date)" >> "${LOG_FILE}"
 else
-    printf "%s - Process finished.\n" "$(get_date)" >> "${LOG_FILE}"
+    printf "%s" "$(date +"%Y-%m-%d %H:%M:%S")" > "${LAST_FILE}"
 fi
+
+clean_up
+printf "%s - Process finished.\n" "$(get_date)" >> "${LOG_FILE}"
