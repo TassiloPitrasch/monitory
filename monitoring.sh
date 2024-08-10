@@ -25,7 +25,7 @@ add_facts_section () {
     readonly section_name values_placeholder values_file
 
     # Conditional formatting (leading comma)
-    [[ -n "${FACTS[@]}" ]] && printf ",\n" >> "${OUT_FILE}"
+    [[ -n "${FACTS[*]}" ]] && printf ",\n" >> "${OUT_FILE}"
     # Getting a new entry in the "facts" section by copying the template ("sections.json"),
     # setting the section's name (directly) and
     # setting the variable placeholder (which is later replaced by JQ with the data from the FACTS via the data-file)
@@ -55,6 +55,12 @@ if [[ "${webhook_url}" == "null" ]]; then
     printf "%s - Webhook URL not defined.\n" "$(get_date)" >> "${LOG_FILE}"
     exit 1
 fi
+# Static data in the Teams notification
+summary="$(jq -e -r ".summary" "${SETTINGS_FILE}")"
+title="$(jq -e -r ".title" "${SETTINGS_FILE}")"
+color="$(jq -e -r ".color" "${SETTINGS_FILE}")"
+text="$(jq -e -r ".text" "${SETTINGS_FILE}")"
+
 # File containing the variable data, is read by JQ
 DATA_FILE="${MONITORING_TEMP}/data.json"
 # File containing the final JSON data structure with the relevant placeholders,
@@ -62,10 +68,6 @@ DATA_FILE="${MONITORING_TEMP}/data.json"
 OUT_FILE="${MONITORING_TEMP}/message.json"
 # Writing the header
 cat "${MONITORING_TEMPLATES}/head.json" > "${OUT_FILE}"
-# Static data
-summary="Kore Daily Monitoring Summary"
-color="1a1aff"
-text="This is the monitoring summary for Kore, containing events from the last 24 hours."
 # Array holding data for the individual facts in the "facts" sections
 # Key is the respective placeholder in the FINAL data-file
 declare -A FACTS
@@ -140,7 +142,7 @@ for fact in "${!FACTS[@]}"; do
     printf '"%s": "%s",\n' "${fact}" "${FACTS[$fact]}" >> "${DATA_FILE}"
 done
 # Adding the title here as well (as it contains a variable - the date)
-printf '"%s": "%s"\n' "title" "$(get_date) - Kore Monitoring Summary" >> "${DATA_FILE}"
+printf '"%s": "%s"\n' "title" "$(get_date) - ${title}" >> "${DATA_FILE}"
 printf "}" >> "${DATA_FILE}"
 
 # Cleansing the data-file

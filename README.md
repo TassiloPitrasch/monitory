@@ -23,6 +23,10 @@ The settings-file should look like this:
 
     {
         "webhook_url": "URL to your Teams Channel",
+        "summary": "Summary of the notification - metadata, is not displayed",
+        "title": "Title of the notification - displayed as heading",
+        "text": "Text for the notification - displayed as standard text",
+        "color": "Base color for the notification (hex) - like fffff for white",
         "private_names": [
           "Array of usernames", "that should be monitored"]
     }
