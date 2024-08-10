@@ -1,0 +1,9 @@
+{
+   "@type":"MessageCard",
+   "@context":"http://schema.org/extensions",
+   "summary":$summary,
+   "themeColor":$color,
+   "title":$data.title,
+   "text":$text,
+   "sections": [{
+       "facts": [
