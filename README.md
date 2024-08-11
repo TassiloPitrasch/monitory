@@ -4,8 +4,9 @@ This is just a small script to process **fail2ban/systemd** logs and report the 
 # Prerequisites 
 Easy:
 
- - Bash 4.x (as an associative array is used) ➡️ test with `echo $BASH_VERSION`
- - [jq](https://github.com/jqlang/jq) >= 1.6 ➡️ test with `jq --version` 
+ - Bash 4.x ➡️ test with `echo $BASH_VERSION`
+ - [curl](https://curl.se/) >= 7.67.0 ➡️ test with `curl --version`
+ - [jq](https://github.com/jqlang/jq) >= 1.6 ➡️ test with `jq --version`
  - systemd/ssh logs available via journalctl ➡️ test with `journalctl -u ssh`
  - fail2ban-client for the sshd jail ➡️ test with `fail2ban-client status sshd`
  - A Teams Channel to push to via a [Webhook](https://learn.microsoft.com/en-us/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook?tabs=newteams%2Cdotnet#create-an-incoming-webhook)
@@ -43,5 +44,5 @@ The script checks for three things:
 
 The metrics are collected since the last time the script was executed.
 During the first execution, the option `--since yesterday` is used for `journalctl` when grabbing the data for the third metric.
-Note that no notification is send if no events were parsed.
 
+Note that no notification is send if no events were parsed.
