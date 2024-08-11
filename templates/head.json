@@ -3,7 +3,7 @@
    "@context":"http://schema.org/extensions",
    "summary":$summary,
    "themeColor":$color,
-   "title":$data.title,
+   "title":$title,
    "text":$text,
    "sections": [{
        "facts": [

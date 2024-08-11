@@ -1,4 +1,4 @@
         {
-           "name":"%section_name%",
-           "value":%section_value%
+           "name":$section_name,
+           "value":$section_data
         }

@@ -8,30 +8,41 @@ get_date () {
 
 # Removing generated files when terminating
 clean_up () {
-    rm -f "${OUT_FILE}" "${DATA_FILE}"
+    rm -f "${OUT_FILE}"
 }
 
-# Adding a new fact section to the out-file with a placeholder for the actual data that is stored in FACTS
+# Helper to format section data
+parse_section_data () {
+    # Parameters
+    # File that contains the data to be parsed
+    values_file="${1}"
+
+    # Returning new-lines as "\n"
+    while IFS= read -r line; do
+        echo "${line}"
+    done < "${values_file}"
+}
+
+# Adding a new fact section to the out-file
 # Globals: OUT_FILE, FACTS
 add_facts_section () {
     # Parameters
-    local section_name; local values_placeholder; local values_file
+    local section_name; local values_file
     # Name of the section; is inserted directly
     section_name="${1}"
-    # Placeholder for the content of that file in the final out-file
-    values_placeholder="${2}"
-    # File that contains the actual values that are added to FACTS
-    values_file="${3}"
-    readonly section_name values_placeholder values_file
+    # File that contains the actual values
+    values_file="${2}"
+    readonly section_name
 
     # Conditional formatting (leading comma)
-    [[ -n "${FACTS[*]}" ]] && printf ",\n" >> "${OUT_FILE}"
-    # Getting a new entry in the "facts" section by copying the template ("sections.json"),
-    # setting the section's name (directly) and
-    # setting the variable placeholder (which is later replaced by JQ with the data from the FACTS via the data-file)
-    sed -e "s|%section_name%|${section_name}|" -e "s|%section_value%|\$data.${values_placeholder}|" "${SECTIONS_TEMPLATE}" >> "${OUT_FILE}"
-    # Reading the provided file to the respective entry in FACTS, replacing new-lines with "\\n"
-    FACTS["${values_placeholder}"]="$(tr "\n" ";" < "${values_file}" | sed "s|;|\\\\n|g")"
+    if [[ "${FACTS}" -eq 1 ]]; then
+        printf ",\n" >> "${OUT_FILE}"
+    else
+       FACTS=1
+    fi
+
+    # Getting a new entry in the "facts" section by copying the template ("sections.json") and setting the section's name and value/data
+    jq --null-input --exit-status --arg section_name "${section_name}" --arg section_data "$(parse_section_data "${values_file}")" --from-file "${SECTIONS_TEMPLATE}" >> "${OUT_FILE}"
 }
 
 
@@ -43,6 +54,8 @@ MONITORING_TEMPLATES="${MONITORING_HOME}/templates"
 SECTIONS_TEMPLATE="${MONITORING_TEMPLATES}/sections.json"
 LOG_FILE="${MONITORING_HOME}/log.txt"
 LAST_FILE="${MONITORING_TEMP}/last"
+# Holds if data has been written to the "facts" section
+FACTS=0
 
 # Log-file rotation
 [[ "$(du -s "${LOG_FILE}" | cut -f1)" -gt 100000 ]] && printf "%s - Lofile rotated.\n" "$(get_date)" > "${LOG_FILE}"
@@ -57,20 +70,15 @@ if [[ "${webhook_url}" == "null" ]]; then
 fi
 # Static data in the Teams notification
 summary="$(jq -e -r ".summary" "${SETTINGS_FILE}")"
-title="$(jq -e -r ".title" "${SETTINGS_FILE}")"
+title="$(get_date) - $(jq -e -r ".title" "${SETTINGS_FILE}")"
 color="$(jq -e -r ".color" "${SETTINGS_FILE}")"
 text="$(jq -e -r ".text" "${SETTINGS_FILE}")"
+readonly summary title color text
 
-# File containing the variable data, is read by JQ
-DATA_FILE="${MONITORING_TEMP}/data.json"
-# File containing the final JSON data structure with the relevant placeholders,
-# as the number of sections is variable
+# File containing the final JSON data structure
 OUT_FILE="${MONITORING_TEMP}/message.json"
 # Writing the header
 cat "${MONITORING_TEMPLATES}/head.json" > "${OUT_FILE}"
-# Array holding data for the individual facts in the "facts" sections
-# Key is the respective placeholder in the FINAL data-file
-declare -A FACTS
 
 # sshd: WoBeeCon-specific (private) usernames the "hackers" used
 readonly hacker_name_file="${MONITORING_TEMP}/hacker_names.txt"
@@ -98,7 +106,7 @@ done
 
 # Checking if matches were found and adding a corresponding section if necessary
 if [[ -s "${matching_names_file}" ]]; then
-    add_facts_section "Private usernames used for unsuccessful connection requests:" "hackers" "${matching_names_file}"
+    add_facts_section "Private usernames used for unsuccessful connection requests:" "${matching_names_file}"
 fi
 
 # fail2ban: newly blocked IPs
@@ -117,16 +125,16 @@ fail2ban-client status sshd | grep "Banned IP list" | sed -E "s|.*Banned IP list
 comm -23 "${current_ip_blocklist}" "${latest_ip_blocklist}" > "${new_ip_blocklist}"
 # Checking if new IPs were blocked and adding a corresponding section if necessary
 if [[ -s "${new_ip_blocklist}" ]]; then
-    add_facts_section "Newly blocked IPs:" "new_blocked" "${new_ip_blocklist}"
+    add_facts_section "Newly blocked IPs:" "${new_ip_blocklist}"
 fi
 comm -13 "${current_ip_blocklist}" "${latest_ip_blocklist}" > "${unblocked_ips_list}"
 # Checking if IPs were unblocked and adding a corresponding section if necessary
 if [[ -s "${unblocked_ips_list}" ]]; then
-    add_facts_section "Unblocked IPs:" "unblocked" "${unblocked_ips_list}"
+    add_facts_section "Unblocked IPs:" "${unblocked_ips_list}"
 fi
 
 # Ending the execution if nothing to report has been identified
-if [[ -z "${FACTS[*]}" ]]; then
+if [[ "${FACTS}" -eq 0 ]]; then
     clean_up
     printf "%s" "$(date +"%Y-%m-%d %H:%M:%S")" > "${LAST_FILE}"
     printf "%s - Nothing to report.\n" "$(get_date)" >> "${LOG_FILE}"
@@ -136,23 +144,11 @@ fi
 # Writing the footer to the out-file
 cat "${MONITORING_TEMPLATES}/foot.json" >> "${OUT_FILE}"
 
-# Preparing a data file mapping the entries in FACTS and their placeholders in the out-file
-printf "{" > "${DATA_FILE}"
-for fact in "${!FACTS[@]}"; do
-    printf '"%s": "%s",\n' "${fact}" "${FACTS[$fact]}" >> "${DATA_FILE}"
-done
-# Adding the title here as well (as it contains a variable - the date)
-printf '"%s": "%s"\n' "title" "$(get_date) - ${title}" >> "${DATA_FILE}"
-printf "}" >> "${DATA_FILE}"
-
-# Cleansing the data-file
-# Removing new-lines at the end of entries
-sed -i "s|\\\n\"|\"|g" "${DATA_FILE}"
-# Escaping new-lines for JSON
-sed -i "s|\\\n|\\\n\\\n|g" "${DATA_FILE}"
+# Making new-lines JSON compatible
+sed -i "s|\\\n|\\\n\\\n|g" "${OUT_FILE}"
 
 # Posting the JSON to Teams
-if [[ "$(curl -X POST -H "Content-Type: application/json" -d "$(jq -n --arg "summary" "${summary}" --arg "color" "${color}" --arg "text" "${text}" --argfile "data" "${DATA_FILE}" -f "${OUT_FILE}")" "${webhook_url}")" -ne 1 ]]; then
+if [[ "$(curl --request POST --no-progress-meter --header "Content-Type: application/json" --data "$(jq --null-input --arg "summary" "${summary}" --arg "title" "${title}" --arg "color" "${color}" --arg "text" "${text}" -f "${OUT_FILE}")" "${webhook_url}")" -ne 1 ]]; then
     printf "%s - Failed to push message to Teams.\n" "$(get_date)" >> "${LOG_FILE}"
 else
     printf "%s" "$(date +"%Y-%m-%d %H:%M:%S")" > "${LAST_FILE}"
