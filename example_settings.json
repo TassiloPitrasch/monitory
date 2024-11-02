@@ -1,0 +1,16 @@
+{
+    "webhook_url": "WEBHOOK_URL",
+    "summary": "SUMMARY",
+    "title": "TITLE",
+    "text": "TEXT",
+    "color": "HEX-COLOR",
+    "push_empty": true/false,
+    "private_names": [
+      "root"
+    ],
+    "services": {
+      "docker": [
+        "nginx"
+      ]
+    }
+}
