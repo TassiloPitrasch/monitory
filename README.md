@@ -1,5 +1,5 @@
 # Basics
-This is just a small script to process **fail2ban/systemd** logs and report the findings to a Teams Channel via a Webhook.
+This is just a small script to process **fail2ban/systemd/docker** logs and report the findings to a Teams Channel via a Webhook.
 
 # Prerequisites 
 Easy:
@@ -7,9 +7,13 @@ Easy:
  - Bash 4.x ➡️ test with `echo $BASH_VERSION`
  - [curl](https://curl.se/) >= 7.67.0 ➡️ test with `curl --version`
  - [jq](https://github.com/jqlang/jq) >= 1.6 ➡️ test with `jq --version`
+ - [envsubst](https://www.man7.org/linux/man-pages/man1/envsubst.1.html) >= 0.21 ➡️ test with `envsubst --version`
+ - A Teams Channel to push to via a [Webhook](https://learn.microsoft.com/en-us/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook?tabs=newteams%2Cdotnet#create-an-incoming-webhook)
+
+Depending on the services you want to monitor:
  - systemd/ssh logs available via journalctl ➡️ test with `journalctl -u ssh`
  - fail2ban-client for the sshd jail ➡️ test with `fail2ban-client status sshd`
- - A Teams Channel to push to via a [Webhook](https://learn.microsoft.com/en-us/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook?tabs=newteams%2Cdotnet#create-an-incoming-webhook)
+ - Docker ➡️ test with `docker --version`
 
 # Content
 
@@ -28,19 +32,24 @@ The settings-file should look like this:
         "title": "Title of the notification - displayed as heading",
         "text": "Text for the notification - displayed as standard text",
         "color": "Base color for the notification (hex) - like fffff for white",
+        "push_empty": "true/false - how to deal with empty section data",
         "private_names": [
-          "Array of usernames", "that should be monitored"]
+          "Array of usernames", "that should be monitored"
+        ],
+        "services": {
+          "docker": [
+            "Array of Docker services (by container names)", "that should be monitored"
+          ]
+        }
     }
 
 # Execution
-`./monitoring.sh` - that's it.
+`./monitoring.sh` - to run the script.
+Following checks can be executed by setting the corresponding flag.
 
-# Output
-The script checks for three things:
-
- 1. IPs newly blocked by fail2ban.
- 2. IPs unblocked by fail2ban.
- 3. Unsuccessful authentication attempts with the usernames defined in the settings-file.
+ - `-f`: fail2ban ➡️ IPs newly blocked and unblocked by fail2ban. This flag needs an argument, either `full` if a list of the IP addresses should be displayed, `numbers` if the numbers are sufficient.
+ - `-s`: ssh ➡️ Unsuccessful authentication attempts with the usernames defined in the settings-file.
+ - `-d`: Docker ➡️ Running Docker services as defined (by the respective container names) in the settings-file.
 
 The metrics are collected since the last time the script was executed.
 During the first execution, the option `--since yesterday` is used for `journalctl` when grabbing the data for the third metric.
