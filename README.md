@@ -36,6 +36,9 @@ The settings-file should look like this:
         "private_names": [
           "Array of usernames", "that should be monitored"
         ],
+        "modsec": {
+           "audit_log": Path to the ModSecurity AUDIT-log to be monitored"
+        },
         "services": {
           "docker": [
             "Array of Docker services (by container names)", "that should be monitored"
@@ -49,6 +52,7 @@ Following checks can be executed by setting the corresponding flag.
 
  - `-f`: fail2ban ➡️ IPs newly blocked and unblocked by fail2ban. This flag needs an argument, either `full` if a list of the IP addresses should be displayed, `numbers` if the numbers are sufficient.
  - `-s`: ssh ➡️ Unsuccessful authentication attempts with the usernames defined in the settings-file.
+ - `-m`: ModSecurity: ➡️ Traffic blocked by ModSecurity. This flag can handle an argument: the minimum severity of an event to have it included in the monitoring reports (from 0 - 5).
  - `-d`: Docker ➡️ Running Docker services as defined (by the respective container names) in the settings-file.
 
 The metrics are collected since the last time the script was executed.

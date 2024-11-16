@@ -8,6 +8,9 @@
     "private_names": [
       "root"
     ],
+   "modsec": {
+      "audit_log": "/etc/nginx/logs/modsec_audit.log"
+    },
     "services": {
       "docker": [
         "nginx"

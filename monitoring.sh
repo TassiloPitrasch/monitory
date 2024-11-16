@@ -26,7 +26,7 @@ check_private_user_names () {
     declare -a private_names; declare -a targeted_private_names
     readonly hacker_names_file="${MONITORING_TEMP}/hacker_names.txt"
 
-    # Timestamp of the previous execution
+    # Date and time of the previous execution
     last_execution="${1}"
     readonly last_execution
 
@@ -98,6 +98,50 @@ check_fail2ban_jails () {
     else
         add_facts_section "Number of newly unblocked IPs:" "${#unblocked_ips_list[@]}"
     fi
+}
+
+# Checking ModSecurity alerts
+# Globals: SETTINGS_FILE
+check_modsecurity_audit () {
+    local modsec_audit; local last_execution; local minimum_severity
+    declare -a unique_ids
+    # Used for storing the parsed details
+    declare -a events
+
+    # Getting the path to the "modsec_audit.log"-file to be examined
+    modsec_audit="$(jq -r ".modsec.audit_log" "${SETTINGS_FILE}")"
+    readonly modsec_audit
+
+    # Timestamp of the previous execution (needed for the log)
+    last_timestamp="$(date -d "${1}" +%s)"
+    readonly last_execution
+
+    # Minimum severity of an event to be included in the alert - default is 4
+    minimum_severity="${2:-4}"
+
+    # Getting the current unique IDs
+    # The first ten digits work as a timestamp, so that events before the previous execution can be cut
+    mapfile -t "unique_ids" < <(grep -P -o "(?<=unique_id \")[0-9.]+" "${modsec_audit}" | sort -u | awk -v last_timestamp="${last_timestamp}" '{if(substr($1, 1, 10) > last_timestamp) {print $1}}')
+    readonly unique_ids
+
+    # Iterating the events by their unique IDs and parsing basic data
+    for unique_id in "${unique_ids[@]}"; do
+        full_data="$(grep -P "\b${unique_id}\b" "${modsec_audit}")"
+        # Getting the highest severity in the event
+        severity="$(echo "${full_data}" | grep -P -o "(?<=\[severity \")\d" | awk '$0>x{x=$0};END{print x}')"
+        # Skipping events with a severity below the threshold
+        [[ "${severity}" -lt "${minimum_severity}" ]] && continue
+
+        # Parsing the date and time of the attack, the attacker's IP and the attacked URI
+        date_time="$(echo "${full_data}" | grep -P -o "^\[[0-3]\d\/\w+\/20\d{2}:[\d:]+ \+\d+\](?= ${unique_id}\b)" | tr -d "[" | tr -d "]")"
+        attacker_ip="$(echo "${full_data}" | grep -P -o "(?<=\] ${unique_id} )[\d.]+\b")"
+        uri="$(echo "${full_data}" | grep -P -o "(?<=\[uri \")[^\"]+" | sort -u)"
+
+        # Storing the results
+        events+=("${date_time}: ${severity} - ${attacker_ip}@${uri}")
+    done
+
+    add_facts_section "Traffic blocked by ModSecurity (Date/Time: Severity - Attacker@URI):" "${events[@]}"
 }
 
 # Checking Docker services
@@ -215,11 +259,13 @@ log "Last execution: ${last_execution}"
 # Executing the defined sub-modules
 # s -> SSH: Checking the usernames that tried to log in via SSH
 # f -> fail2ban: Getting (the number of) newly blocked and unblocked IP addresses
+# m -> ModSecurity: Getting some details regarding recent attacks
 # d -> docker: Getting the status of the defined Docker services
-while getopts "sf:d" opt; do
+while getopts "sf:m:d" opt; do
     case $opt in
         s) check_private_user_names "${last_execution}";;
         f) check_fail2ban_jails "${OPTARG}";;
+        m) check_modsecurity_audit "${last_execution}" "${OPTARG}";;
         d) check_docker_services;;
         *) log "Unknown flag: \"${opt}\"";;
      esac
@@ -228,7 +274,7 @@ done
 # Ending the execution if nothing to report has been identified
 if [[ "${FACTS}" -eq 0 ]]; then
     clean_up
-    printf "%s" "$(date +"%Y-%m-%d %H:%M:%S")" > "${LAST_FILE}"
+    printf "%s" "$(date +"%Y-%m-%d %H:%M:%S +z")" > "${LAST_FILE}"
     log "Nothing to report."
     exit 0
 fi
@@ -243,7 +289,7 @@ sed -i "s|\\\n|n|g" "${OUT_FILE}"
 if [[ "$(curl --request POST --no-progress-meter --header "Content-Type: application/json" --data "$(jq --null-input --arg "summary" "${summary}" --arg "title" "${title}" --arg "color" "${color}" --arg "text" "${text}" -f "${OUT_FILE}")" "${webhook_url}")" -ne 1 ]]; then
     log "Failed to push message to Teams."
 else
-    printf "%s" "$(date +"%Y-%m-%d %H:%M:%S")" > "${LAST_FILE}"
+    printf "%s" "$(date +"%Y-%m-%d %H:%M:%S +z")" > "${LAST_FILE}"
 fi
 
 clean_up
