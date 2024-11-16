@@ -1,5 +1,5 @@
 # Basics
-This is just a small script to process **fail2ban/systemd/ModSecurity/docker** logs and report the findings to a Teams Channel via a Webhook.
+This is just a small script to process **fail2ban/systemd/ModSecurity/Docker** logs and report the findings to a Teams Channel via a Webhook.
 
 # Prerequisites 
 Easy:
