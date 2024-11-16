@@ -13,6 +13,7 @@ Easy:
 Depending on the services you want to monitor:
  - systemd/ssh logs available via journalctl ➡️ test with `journalctl -u ssh`
  - fail2ban-client for the sshd jail ➡️ test with `fail2ban-client status sshd`
+ - ModSecurity with an active, standard audit-log ➡️ compare your structure with the one described in the [handbook](https://www.feistyduck.com/library/modsecurity-handbook-free/online/ch04-logging.html) 
  - Docker ➡️ test with `docker --version`
 
 # Content
