@@ -274,7 +274,7 @@ done
 # Ending the execution if nothing to report has been identified
 if [[ "${FACTS}" -eq 0 ]]; then
     clean_up
-    printf "%s" "$(date +"%Y-%m-%d %H:%M:%S +z")" > "${LAST_FILE}"
+    printf "%s" "$(date +"%Y-%m-%d %H:%M:%S %z")" > "${LAST_FILE}"
     log "Nothing to report."
     exit 0
 fi
@@ -289,7 +289,7 @@ sed -i "s|\\\n|n|g" "${OUT_FILE}"
 if [[ "$(curl --request POST --no-progress-meter --header "Content-Type: application/json" --data "$(jq --null-input --arg "summary" "${summary}" --arg "title" "${title}" --arg "color" "${color}" --arg "text" "${text}" -f "${OUT_FILE}")" "${webhook_url}")" -ne 1 ]]; then
     log "Failed to push message to Teams."
 else
-    printf "%s" "$(date +"%Y-%m-%d %H:%M:%S +z")" > "${LAST_FILE}"
+    printf "%s" "$(date +"%Y-%m-%d %H:%M:%S %z")" > "${LAST_FILE}"
 fi
 
 clean_up
